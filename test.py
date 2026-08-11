@@ -9,15 +9,20 @@ import time
 import re
 import json
 import csv
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
 # ============================================================
-# CONFIGURATION
+# ⚙️ CONFIGURATION - EDIT THESE VALUES
 # ============================================================
+PHONE_NUMBER = "58532178"  # <-- CHANGE THIS
+PASSWORD = "598976Lesitsi"     # <-- CHANGE THIS
+SCRAPE_INTERVAL = 5          # Minutes between scrapes (default: 5)
+
+# Sauce Labs credentials (from GitHub Secrets)
 username = os.environ.get('SAUCE_USERNAME')
 access_key = os.environ.get('SAUCE_ACCESS_KEY')
-SCRAPE_INTERVAL = int(os.environ.get('SCRAPE_INTERVAL', 5))  # Minutes
 
 if not username or not access_key:
     print("❌ ERROR: SAUCE_USERNAME or SAUCE_ACCESS_KEY not set!")
@@ -73,6 +78,33 @@ def save_multipliers(multipliers_data):
     except:
         pass
 
+def commit_data_to_github():
+    """Automatically commit and push data to GitHub"""
+    try:
+        # Check if there are changes to commit
+        result = subprocess.run(['git', 'status', '--porcelain', 'data/'], 
+                               capture_output=True, text=True)
+        
+        if result.stdout.strip():
+            # Add data folder
+            subprocess.run(['git', 'add', 'data/'], capture_output=True)
+            
+            # Commit
+            commit_msg = f"Update multiplier data - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            subprocess.run(['git', 'commit', '-m', commit_msg], capture_output=True)
+            
+            # Push
+            subprocess.run(['git', 'push'], capture_output=True)
+            
+            print(f"✅ Data committed to GitHub at {datetime.now().strftime('%H:%M:%S')}")
+            return True
+        else:
+            print("ℹ️ No new data to commit")
+            return False
+    except Exception as e:
+        print(f"⚠️ Could not commit data: {e}")
+        return False
+
 # ============================================================
 # SCRAPER FUNCTION
 # ============================================================
@@ -116,11 +148,11 @@ def scrape_aviator():
         
         email_field = wait.until(EC.presence_of_element_located((By.ID, "v-0-username")))
         email_field.clear()
-        email_field.send_keys("58532178")
+        email_field.send_keys(PHONE_NUMBER)  # Using config variable
         
         password_field = driver.find_element(By.ID, "v-0-password")
         password_field.clear()
-        password_field.send_keys("598976Lesitsi")
+        password_field.send_keys(PASSWORD)  # Using config variable
         
         login_button = wait.until(EC.element_to_be_clickable((By.ID, "v-0-submit-button")))
         login_button.click()
@@ -177,6 +209,9 @@ def scrape_aviator():
             if new_data:
                 save_multipliers(new_data)
                 print(f"✅ Saved {new_count} new multiplier(s)")
+                
+                # 🔥 COMMIT TO GITHUB (so you can view while running)
+                commit_data_to_github()
             else:
                 print("ℹ️ No new multipliers found")
             
@@ -210,8 +245,10 @@ def main():
     print(f"\n{'='*60}")
     print("🚀 24/7 AVIATOR SCRAPER STARTED")
     print(f"{'='*60}")
+    print(f"📱 Phone: {PHONE_NUMBER}")
     print(f"⏰ Scraping every {SCRAPE_INTERVAL} minute(s)")
     print(f"📁 Data stored in: {DATA_DIR}")
+    print(f"📤 Auto-commit to GitHub: ENABLED")
     print(f"{'='*60}")
     
     run_count = 0
