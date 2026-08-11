@@ -342,7 +342,7 @@ try:
     print("🔐 STEP 1: LOGGING IN")
     print("="*60)
     
-    driver.get("https://thababet.co.ls/sign-in")
+    driver.get("https://thababet.co.ls/spribe/8203")
     print("📄 Loaded ThabaBet login page")
     wait.until(EC.presence_of_element_located((By.CLASS_NAME, "login-page")))
     
