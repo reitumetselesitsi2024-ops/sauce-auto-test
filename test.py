@@ -18,7 +18,7 @@ from pathlib import Path
 # ============================================================
 PHONE_NUMBER = "58532178"  # <-- CHANGE THIS
 PASSWORD = "598976Lesitsi"     # <-- CHANGE THIS
-SCRAPE_INTERVAL = 5          # Minutes between scrapes (default: 5)
+SCRAPE_INTERVAL = 2          # Minutes between scrapes (default: 5)
 
 # Sauce Labs credentials (from GitHub Secrets)
 username = os.environ.get('SAUCE_USERNAME')
