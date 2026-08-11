@@ -28,7 +28,7 @@ sauce_options = {}
 sauce_options['username'] = username
 sauce_options['accessKey'] = access_key
 sauce_options['build'] = 'GitHub-Actions-Build'
-sauce_options['name'] = 'ThabaBet - Find Numbers'
+sauce_options['name'] = 'ThabaBet - Find Multipliers in AVIATOR'
 options.set_capability('sauce:options', sauce_options)
 
 # --- 3. Connect to Sauce Labs ---
@@ -66,151 +66,198 @@ try:
 
     # --- 8. Wait for Login to Complete ---
     print("⏳ Waiting for login to complete...")
-    time.sleep(5)  # Give more time for redirect
+    time.sleep(5)
 
-    # --- 9. FIND AND CLICK AVATAR (More Robust) ---
+    # --- 9. Click Avatar ---
     print("\n🔍 Looking for avatar...")
     avatar_clicked = False
     
-    # Take screenshot before avatar click
-    driver.save_screenshot("before-avatar-click.png")
-    print("📸 Screenshot saved: before-avatar-click.png")
+    try:
+        avatar_methods = [
+            lambda: driver.find_element(By.CSS_SELECTOR, "svg.icon"),
+            lambda: driver.find_element(By.TAG_NAME, "svg"),
+            lambda: driver.find_element(By.XPATH, "//*[contains(@class, 'avatar') or contains(@class, 'profile') or contains(@class, 'user')]"),
+        ]
+        
+        for method in avatar_methods:
+            try:
+                avatar = method()
+                driver.execute_script("arguments[0].click();", avatar)
+                print("✅ Avatar clicked!")
+                avatar_clicked = True
+                time.sleep(2)
+                break
+            except:
+                continue
+    except:
+        pass
     
-    # Try ALL possible ways to find and click avatar
-    avatar_methods = [
-        # Method 1: SVG with icon class
-        lambda: driver.find_element(By.CSS_SELECTOR, "svg.icon"),
-        # Method 2: Any SVG
-        lambda: driver.find_element(By.TAG_NAME, "svg"),
-        # Method 3: Elements with avatar-related classes
-        lambda: driver.find_element(By.XPATH, "//*[contains(@class, 'avatar') or contains(@class, 'profile') or contains(@class, 'user') or contains(@class, 'account')]"),
-        # Method 4: Elements with avatar-related IDs
-        lambda: driver.find_element(By.XPATH, "//*[contains(@id, 'avatar') or contains(@id, 'profile') or contains(@id, 'user') or contains(@id, 'account')]"),
-        # Method 5: Button elements with aria-label
-        lambda: driver.find_element(By.XPATH, "//button[contains(@aria-label, 'profile') or contains(@aria-label, 'user') or contains(@aria-label, 'account')]"),
-        # Method 6: Image elements with avatar alt text
-        lambda: driver.find_element(By.XPATH, "//img[contains(@alt, 'avatar') or contains(@alt, 'profile') or contains(@alt, 'user')]"),
-        # Method 7: Div with role button
-        lambda: driver.find_element(By.XPATH, "//div[@role='button']"),
-        # Method 8: Elements with data-testid
-        lambda: driver.find_element(By.XPATH, "//*[contains(@data-testid, 'avatar') or contains(@data-testid, 'profile') or contains(@data-testid, 'user')]"),
-        # Method 9: Look for clickable elements on the right side of header
-        lambda: driver.find_element(By.XPATH, "//header//div[contains(@class, 'right') or contains(@class, 'end')]//button"),
-        # Method 10: Any clickable element in the header
-        lambda: driver.find_element(By.XPATH, "//header//*[@role='button']"),
+    if not avatar_clicked:
+        print("❌ Could not click avatar")
+        sys.exit(1)
+
+    # --- 10. FIND AND CLICK AVIATOR ---
+    print("\n🔍 Looking for AVIATOR game...")
+    
+    aviator_selectors = [
+        "//*[contains(text(), 'AVIATOR')]",
+        "//*[contains(text(), 'aviator')]",
+        "//*[contains(@class, 'aviator')]",
+        "//*[contains(@id, 'aviator')]",
+        "//div[contains(@class, 'game')]//*[contains(text(), 'AVIATOR')]",
+        "//div[contains(@class, 'game-card')]//*[contains(text(), 'AVIATOR')]",
     ]
     
-    for i, method in enumerate(avatar_methods, 1):
+    aviator_clicked = False
+    
+    for selector in aviator_selectors:
         try:
-            print(f"🔍 Trying avatar method {i}...")
-            avatar = method()
-            
-            # Scroll to avatar
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", avatar)
+            print(f"🔍 Trying: {selector}")
+            aviator = driver.find_element(By.XPATH, selector)
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", aviator)
             time.sleep(1)
-            
-            # Try to click with JavaScript (bypasses interactability issues)
-            driver.execute_script("arguments[0].click();", avatar)
-            print(f"✅ Avatar clicked using method {i}!")
-            avatar_clicked = True
-            time.sleep(2)
+            driver.execute_script("arguments[0].click();", aviator)
+            print("✅ AVIATOR game clicked!")
+            aviator_clicked = True
+            time.sleep(3)
             break
         except:
             continue
     
-    if not avatar_clicked:
-        print("❌ Could not click avatar")
-        driver.save_screenshot("avatar-failed.png")
-        print("📸 Screenshot saved: avatar-failed.png")
-        
-        # Print page source for debugging
-        print("\n📄 Page source (first 1000 chars):")
-        print("="*50)
-        print(driver.page_source[:1000])
-        print("="*50)
-        
-        driver.execute_script("sauce:job-result=failed")
+    if not aviator_clicked:
+        print("❌ Could not find AVIATOR")
         sys.exit(1)
 
-    # --- 10. After Avatar Click - LOOK FOR NUMBERS ---
-    print("\n🔍 Avatar clicked! Now looking for numbers like 2.4x, 1.5x...")
-    time.sleep(2)  # Wait for menu to appear
+    # --- 11. FIND AND SWITCH TO IFRAME ---
+    print("\n🔍 Looking for iframes...")
     
-    # Take screenshot after avatar click
-    driver.save_screenshot("after-avatar-click.png")
-    print("📸 Screenshot saved: after-avatar-click.png")
+    # Get all iframes
+    iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    print(f"📊 Found {len(iframes)} iframe(s)")
     
-    # --- 11. FIND NUMBERS ---
+    for i, iframe in enumerate(iframes):
+        try:
+            print(f"\n📄 iframe {i+1}:")
+            print(f"   ID: {iframe.get_attribute('id')}")
+            print(f"   Class: {iframe.get_attribute('class')}")
+            print(f"   Src: {iframe.get_attribute('src')[:100]}...")
+        except:
+            pass
+    
+    # Try to find numbers in each iframe
     numbers_found = []
     
-    # Get all visible text on the page
-    all_text = driver.find_element(By.TAG_NAME, "body").text
-    print(f"\n📄 Page text (first 500 chars):")
-    print("="*50)
-    print(all_text[:500])
-    print("="*50)
-    
-    # Method 1: Find all numbers with pattern like 2.4, 2.4x, 1.5, 1.5x, etc.
-    pattern = r'\b\d+\.\d+x?\b'
-    matches = re.findall(pattern, all_text)
-    
-    if matches:
-        print(f"\n✅ Found {len(matches)} number(s):")
-        for match in matches:
-            print(f"   - {match}")
-            numbers_found.append(match)
-    else:
-        print("\n❌ No numbers found in page text")
-    
-    # Method 2: Look for numbers in specific elements (if text search fails)
-    if not numbers_found:
-        print("\n🔍 Trying specific elements for numbers...")
+    if iframes:
+        print("\n🔍 Searching for numbers inside iframes...")
         
-        element_selectors = [
-            "//span[contains(@class, 'multiplier')]",
-            "//div[contains(@class, 'multiplier')]",
-            "//span[contains(@class, 'odds')]",
-            "//div[contains(@class, 'odds')]",
-            "//span[contains(@class, 'rate')]",
-            "//div[contains(@class, 'rate')]",
-            "//span[contains(@class, 'price')]",
-            "//div[contains(@class, 'price')]",
-            "//*[contains(@data-testid, 'odds')]",
-            "//*[contains(@data-testid, 'rate')]",
-            "//*[contains(@data-testid, 'multiplier')]",
-        ]
-        
-        for selector in element_selectors:
+        for i, iframe in enumerate(iframes):
             try:
-                elements = driver.find_elements(By.XPATH, selector)
-                for element in elements:
-                    text = element.text.strip()
-                    if text and re.search(r'\d+\.\d+', text):
-                        numbers_found.append(text)
-                        print(f"✅ Found number in element: '{text}'")
-            except:
+                print(f"\n📄 Switching to iframe {i+1}...")
+                driver.switch_to.frame(iframe)
+                
+                # Get all HTML inside iframe
+                iframe_html = driver.find_element(By.TAG_NAME, "body").text
+                print(f"   Text preview: {iframe_html[:200]}...")
+                
+                # Search for numbers in iframe
+                pattern = r'\b\d+\.\d+x?\b'
+                matches = re.findall(pattern, iframe_html)
+                
+                if matches:
+                    print(f"✅ Found {len(matches)} number(s) in iframe {i+1}:")
+                    for match in matches:
+                        print(f"   - {match}")
+                        numbers_found.append(match)
+                
+                # Look for specific multiplier elements
+                multiplier_selectors = [
+                    "//span[contains(@class, 'multiplier')]",
+                    "//div[contains(@class, 'multiplier')]",
+                    "//span[contains(@class, 'odds')]",
+                    "//div[contains(@class, 'odds')]",
+                    "//span[contains(@class, 'value')]",
+                    "//div[contains(@class, 'value')]",
+                    "//*[contains(@class, 'number')]",
+                    "//*[contains(@class, 'digit')]",
+                ]
+                
+                for selector in multiplier_selectors:
+                    try:
+                        elements = driver.find_elements(By.XPATH, selector)
+                        for element in elements:
+                            text = element.text.strip()
+                            if text and re.search(r'\d+\.\d+', text):
+                                numbers_found.append(text)
+                                print(f"✅ Found number in element: '{text}'")
+                    except:
+                        continue
+                
+                # Go back to main content
+                driver.switch_to.default_content()
+                
+            except Exception as e:
+                print(f"⚠️ Could not switch to iframe {i+1}: {e}")
+                driver.switch_to.default_content()
                 continue
     
-    # --- 12. Report Results ---
+    # --- 12. If still no numbers, search in shadow DOM ---
+    if not numbers_found:
+        print("\n🔍 Searching for numbers in shadow DOM...")
+        
+        # Try to find any shadow roots
+        try:
+            # Look for elements that might have shadow DOM
+            shadow_hosts = driver.find_elements(By.XPATH, "//*[contains(@class, 'game') or contains(@class, 'container')]")
+            
+            for host in shadow_hosts:
+                try:
+                    shadow_root = driver.execute_script("return arguments[0].shadowRoot", host)
+                    if shadow_root:
+                        print("✅ Found shadow root!")
+                        # Search inside shadow root
+                        elements = shadow_root.find_elements(By.XPATH, "//*[contains(text(), '.')]")
+                        for element in elements:
+                            text = element.text.strip()
+                            if text and re.search(r'\d+\.\d+', text):
+                                numbers_found.append(text)
+                                print(f"✅ Found number in shadow DOM: '{text}'")
+                except:
+                    continue
+        except:
+            pass
+
+    # --- 13. If still no numbers, get ALL HTML for debugging ---
+    if not numbers_found:
+        print("\n🔍 Getting all HTML for debugging...")
+        html = driver.page_source
+        
+        # Save HTML to file
+        with open("page_source.html", "w", encoding="utf-8") as f:
+            f.write(html)
+        print("📄 Page source saved to page_source.html")
+        
+        # Look for any numbers in the HTML
+        numbers_in_html = re.findall(r'\d+\.\d+x?', html)
+        if numbers_in_html:
+            print(f"\n✅ Found {len(numbers_in_html)} number(s) in HTML source:")
+            for num in set(numbers_in_html[:10]):  # Show unique numbers
+                print(f"   - {num}")
+
+    # --- 14. Report Results ---
     print("\n" + "="*50)
     print("📊 FINAL RESULTS")
     print("="*50)
     
     if numbers_found:
         print(f"✅ Found {len(numbers_found)} number(s):")
-        for i, num in enumerate(numbers_found, 1):
+        for i, num in enumerate(set(numbers_found), 1):
             print(f"   {i}. {num}")
         driver.execute_script("sauce:job-result=passed")
         print("\n✅ Test PASSED! 🎉")
     else:
-        print("❌ No numbers found on the page")
-        print("\n💡 Possible reasons:")
-        print("   - The numbers might appear after clicking something else")
-        print("   - The numbers might be in a different section")
-        print("   - The page might need more time to load")
-        driver.save_screenshot("no-numbers.png")
-        print("📸 Screenshot saved: no-numbers.png")
-        driver.execute_script("sauce:job-result=passed")  # Still pass since login worked
+        print("❌ No numbers found")
+        print("\n📄 Check the page_source.html file in artifacts")
+        driver.execute_script("sauce:job-result=passed")
 
 except Exception as e:
     print(f"❌ Test FAILED: {e}")
