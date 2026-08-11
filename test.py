@@ -7,6 +7,7 @@ from selenium.common.exceptions import TimeoutException, ElementNotInteractableE
 import os
 import sys
 import time
+import re
 
 # --- 1. Get Credentials from GitHub Secrets ---
 username = os.environ.get('SAUCE_USERNAME')
@@ -27,7 +28,7 @@ sauce_options = {}
 sauce_options['username'] = username
 sauce_options['accessKey'] = access_key
 sauce_options['build'] = 'GitHub-Actions-Build'
-sauce_options['name'] = 'ThabaBet - Avatar Click Fixed'
+sauce_options['name'] = 'ThabaBet - Find Numbers After Avatar'
 options.set_capability('sauce:options', sauce_options)
 
 # --- 3. Connect to Sauce Labs ---
@@ -49,13 +50,13 @@ try:
     # --- 5. Enter Email/Mobile Number ---
     email_field = wait.until(EC.presence_of_element_located((By.ID, "v-0-username")))
     email_field.clear()
-    email_field.send_keys("58532178")  # <-- CHANGE THIS!
+    email_field.send_keys("58532178")
     print("✅ Entered email/mobile number")
 
     # --- 6. Enter Password ---
     password_field = driver.find_element(By.ID, "v-0-password")
     password_field.clear()
-    password_field.send_keys("598976Lesitsi")  # <-- CHANGE THIS!
+    password_field.send_keys("598976Lesitsi")
     print("✅ Entered password")
 
     # --- 7. Click Login Button ---
@@ -65,102 +66,149 @@ try:
 
     # --- 8. Wait for Login to Complete ---
     print("⏳ Waiting for login to complete...")
-    time.sleep(3)  # Give time for redirect
-    
-    # --- 9. Find and Click the Avatar Icon (Multiple Strategies) ---
+    time.sleep(3)
+
+    # --- 9. Click Avatar ---
     avatar_clicked = False
     
-    # Strategy 1: Click the SVG icon directly using JavaScript
     try:
         print("🔍 Trying JavaScript click on SVG icon...")
         avatar_svg = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "svg.icon")))
         driver.execute_script("arguments[0].click();", avatar_svg)
         print("✅ Avatar clicked using JavaScript!")
         avatar_clicked = True
-        time.sleep(1)
+        time.sleep(2)  # Wait for menu/dropdown to appear
     except:
-        print("⚠️ Strategy 1 failed, trying next...")
+        print("⚠️ Could not click avatar")
+        driver.execute_script("sauce:job-result=failed")
+        sys.exit(1)
+
+    # --- 10. FIND NUMBERS (Like 2.4x, 1.5x, 3.0x, etc.) ---
+    print("\n🔍 Looking for numbers (like 2.4x, 1.5x, etc.)...")
     
-    # Strategy 2: Find the parent container and click it
-    if not avatar_clicked:
+    numbers_found = []
+    
+    # Strategy 1: Find by specific class that might contain numbers
+    number_selectors = [
+        "//*[contains(text(), '.') and contains(text(), 'x')]",  # Any element with . and x
+        "//*[contains(text(), '2.4')]",  # Specific number
+        "//*[contains(text(), '1.5')]",
+        "//*[contains(text(), '3.0')]",
+        "//span[contains(@class, 'multiplier')]",  # Class with multiplier
+        "//div[contains(@class, 'multiplier')]",
+        "//span[contains(@class, 'rate')]",  # Class with rate
+        "//div[contains(@class, 'rate')]",
+        "//span[contains(@class, 'odds')]",  # Class with odds
+        "//div[contains(@class, 'odds')]",
+        "//span[contains(@class, 'price')]",  # Class with price
+        "//div[contains(@class, 'price')]",
+        "//*[contains(@data-testid, 'multiplier')]",
+        "//*[contains(@data-testid, 'odds')]",
+        "//*[contains(@data-testid, 'rate')]",
+        "//*[contains(@class, 'number')]",
+        "//*[contains(@class, 'value')]",
+    ]
+    
+    for selector in number_selectors:
         try:
-            print("🔍 Trying to click parent container...")
-            avatar_parent = driver.find_element(By.XPATH, "//*[contains(@class, 'avatar') or contains(@class, 'profile') or contains(@class, 'user')]")
-            driver.execute_script("arguments[0].click();", avatar_parent)
-            print("✅ Avatar parent clicked!")
-            avatar_clicked = True
-            time.sleep(1)
+            print(f"🔍 Trying selector: {selector}")
+            elements = driver.find_elements(By.XPATH, selector)
+            for element in elements:
+                text = element.text.strip()
+                if text and re.search(r'\d+\.\d+x?', text):  # Matches numbers like 2.4, 2.4x
+                    numbers_found.append({
+                        'text': text,
+                        'selector': selector,
+                        'element': element
+                    })
+                    print(f"✅ Found number: '{text}' using selector: {selector}")
         except:
-            print("⚠️ Strategy 2 failed, trying next...")
+            continue
     
-    # Strategy 3: Find by data attributes
-    if not avatar_clicked:
-        try:
-            print("🔍 Trying to find by data attributes...")
-            avatar_data = driver.find_element(By.XPATH, "//*[contains(@data-testid, 'avatar') or contains(@data-testid, 'profile')]")
-            driver.execute_script("arguments[0].click();", avatar_data)
-            print("✅ Avatar found by data attribute!")
-            avatar_clicked = True
-            time.sleep(1)
-        except:
-            print("⚠️ Strategy 3 failed, trying next...")
+    # Strategy 2: Get all text and find numbers
+    if not numbers_found:
+        print("\n🔍 Strategy 2: Scanning all visible text for numbers...")
+        all_text = driver.find_element(By.TAG_NAME, "body").text
+        # Find all numbers with decimal and optional 'x'
+        pattern = r'\b\d+\.\d+x?\b'
+        matches = re.findall(pattern, all_text)
+        for match in matches:
+            numbers_found.append({
+                'text': match,
+                'selector': 'FULL_PAGE_SCAN',
+                'element': None
+            })
+            print(f"✅ Found number in page text: '{match}'")
     
-    # Strategy 4: Try clicking the first SVG on the page (if it's the avatar)
-    if not avatar_clicked:
-        try:
-            print("🔍 Trying to click first SVG...")
-            svg_elements = driver.find_elements(By.TAG_NAME, "svg")
-            for svg in svg_elements:
-                if "icon" in svg.get_attribute("class"):
-                    driver.execute_script("arguments[0].click();", svg)
-                    print("✅ Clicked on SVG with 'icon' class!")
-                    avatar_clicked = True
-                    break
-        except:
-            print("⚠️ Strategy 4 failed")
-    
-    # --- 10. If all strategies failed, take a screenshot for debugging ---
-    if not avatar_clicked:
-        print("❌ Could not find or click avatar icon")
-        driver.save_screenshot("avatar-debug.png")
-        print("📸 Screenshot saved as 'avatar-debug.png'")
-        
-        # Try to find what's on the page
-        page_source = driver.page_source
-        print("\n📄 Searching for avatar-related elements in page source...")
-        
-        # Check for any elements that might be the avatar
-        possible_selectors = [
-            "avatar", "profile", "user", "account", 
-            "dropdown", "menu", "profile-menu"
+    # Strategy 3: Look for numbers in specific containers
+    if not numbers_found:
+        print("\n🔍 Strategy 3: Looking in specific containers...")
+        container_selectors = [
+            "//div[@role='button']",
+            "//button",
+            "//span",
+            "//div[contains(@class, 'item')]",
+            "//div[contains(@class, 'card')]",
         ]
         
-        found_elements = []
-        for selector in possible_selectors:
-            elements = driver.find_elements(By.XPATH, f"//*[contains(translate(@class, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{selector}')]")
-            if elements:
-                found_elements.append(f"{selector}: {len(elements)} found")
-        
-        if found_elements:
-            print("📋 Found these elements:")
-            for element in found_elements:
-                print(f"   - {element}")
-        else:
-            print("⚠️ No avatar-related elements found on the page")
-    else:
-        print("✅ Avatar clicked successfully!")
-        
-        # Wait for any menu/dropdown to appear
-        time.sleep(2)
-        print("✅ Check the video to see what opened!")
+        for container_selector in container_selectors:
+            try:
+                containers = driver.find_elements(By.XPATH, container_selector)
+                for container in containers:
+                    text = container.text.strip()
+                    if text and re.search(r'\d+\.\d+x?', text):
+                        numbers_found.append({
+                            'text': text,
+                            'selector': f'{container_selector} (found in container)',
+                            'element': container
+                        })
+                        print(f"✅ Found number: '{text}' in container: {container_selector}")
+            except:
+                continue
 
-    # --- 11. Report Success ---
+    # --- 11. Report Results ---
+    print("\n" + "="*50)
+    print("📊 NUMBER SEARCH RESULTS")
+    print("="*50)
+    
+    if numbers_found:
+        print(f"✅ Found {len(numbers_found)} number(s):")
+        for i, result in enumerate(numbers_found, 1):
+            print(f"   {i}. '{result['text']}'")
+            print(f"      Selector: {result['selector']}")
+    else:
+        print("❌ No numbers found on the page")
+        # Take screenshot for debugging
+        driver.save_screenshot("no-numbers-found.png")
+        print("📸 Screenshot saved as 'no-numbers-found.png'")
+        
+        # Print all text for debugging
+        print("\n📄 All text on page:")
+        print("="*50)
+        all_text = driver.find_element(By.TAG_NAME, "body").text
+        print(all_text[:500])  # Print first 500 characters
+        print("="*50)
+    
+    # --- 12. Try to click on a found number (if any) ---
+    if numbers_found:
+        try:
+            # Click on the first number found
+            first_number_element = numbers_found[0].get('element')
+            if first_number_element:
+                driver.execute_script("arguments[0].click();", first_number_element)
+                print(f"✅ Clicked on number: '{numbers_found[0]['text']}'")
+                time.sleep(1)
+        except:
+            print("ℹ️ Could not click on number (element may not be clickable)")
+    
+    # --- 13. Report Success ---
     if avatar_clicked:
         driver.execute_script("sauce:job-result=passed")
-        print("✅ Test PASSED! 🎉")
+        print("\n✅ Test PASSED! 🎉")
+        print(f"📊 Numbers found: {len(numbers_found)}")
     else:
         driver.execute_script("sauce:job-result=failed")
-        print("❌ Test FAILED - Could not click avatar")
+        print("❌ Test FAILED")
 
 except Exception as e:
     print(f"❌ Test FAILED: {e}")
