@@ -8,7 +8,6 @@ import os
 import sys
 import time
 import re
-import json
 from collections import defaultdict
 
 # --- 1. Get Credentials from GitHub Secrets ---
@@ -30,7 +29,7 @@ sauce_options = {}
 sauce_options['username'] = username
 sauce_options['accessKey'] = access_key
 sauce_options['build'] = 'GitHub-Actions-Build'
-sauce_options['name'] = 'ThabaBet - Login + Avatar + AI Search'
+sauce_options['name'] = 'ThabaBet - Deep Iframe Search'
 options.set_capability('sauce:options', sauce_options)
 
 # --- 3. Connect to Sauce Labs ---
@@ -38,119 +37,161 @@ url = "https://ondemand.eu-central-1.saucelabs.com:443/wd/hub"
 print(f"🚀 Connecting to Sauce Labs...")
 
 # ============================================================
-# AI SEARCH ENGINE CLASS
+# DEEP IFRAME SEARCH ENGINE
 # ============================================================
-class AISearchEngine:
+class DeepIframeSearch:
     def __init__(self, driver, wait):
         self.driver = driver
         self.wait = wait
         self.found_numbers = []
-        self.visited_iframes = set()
-        self.visited_elements = set()
-        self.search_depth = 0
-        self.max_depth = 5
+        self.visited_frames = set()
+        self.search_level = 0
+        self.max_level = 5
+        self.all_iframe_info = []
         
     def log(self, message, level="INFO"):
         print(f"[{level}] {message}")
     
-    def search_for_multipliers(self):
-        """Main search method - tries multiple strategies"""
-        self.log("🤖 Starting AI search for multipliers...")
+    def search_everywhere(self):
+        """Search everything - main entry point"""
+        self.log("🤖 Starting DEEP search for multipliers...")
         
-        # Strategy 1: Search in current page
-        self.log("📄 Strategy 1: Searching current page...")
+        # Step 1: Search main page
+        self.log("📄 Searching main page...")
         self.search_page_for_numbers()
         
-        # Strategy 2: Search in all iframes
+        # Step 2: Find and search all iframes
         if not self.found_numbers:
-            self.log("📄 Strategy 2: Searching all iframes...")
-            self.search_all_iframes()
+            self.log("📄 Searching ALL iframes...")
+            self.search_all_iframes_recursive()
         
-        # Strategy 3: Click on potential game elements
+        # Step 3: If still no numbers, try clicking inside iframes
         if not self.found_numbers:
-            self.log("📄 Strategy 3: Clicking potential game elements...")
-            self.click_potential_game_elements()
-        
-        # Strategy 4: Deep search - follow links and buttons
-        if not self.found_numbers:
-            self.log("📄 Strategy 4: Deep search...")
-            self.deep_search()
+            self.log("📄 Clicking inside iframes...")
+            self.click_inside_iframes()
         
         return self.found_numbers
     
     def search_page_for_numbers(self):
-        """Search the current page for numbers"""
+        """Search current page for numbers"""
         try:
-            # Get all text
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
             
-            # Find numbers with x (like 2.4x, 1.5x)
+            # Find multipliers with x (2.4x, 1.5x, etc.)
             pattern = r'\b\d+\.\d+x?\b'
             matches = re.findall(pattern, body_text)
             
             if matches:
-                self.log(f"✅ Found {len(matches)} number(s) on page: {matches}")
+                self.log(f"✅ Found {len(matches)} multiplier(s): {matches}")
                 self.found_numbers.extend(matches)
                 return True
             
-            # Find any decimal numbers that could be multipliers
+            # Find decimal numbers that could be multipliers (between 1.0 and 100)
             pattern = r'\b\d+\.\d+\b'
             matches = re.findall(pattern, body_text)
-            if matches:
-                self.log(f"✅ Found {len(matches)} decimal number(s): {matches[:10]}")
-                # Only add if they look like multipliers (between 1.0 and 100)
-                for num in matches:
-                    try:
-                        val = float(num)
-                        if 1.0 <= val <= 100.0:
-                            self.found_numbers.append(num)
-                            self.log(f"✅ Added potential multiplier: {num}")
-                    except:
-                        pass
-                return True
-                
+            for num in matches:
+                try:
+                    val = float(num)
+                    if 1.0 <= val <= 100.0:
+                        self.found_numbers.append(num)
+                        self.log(f"✅ Found potential multiplier: {num}")
+                except:
+                    pass
+            
+            return bool(self.found_numbers)
+            
         except Exception as e:
             self.log(f"⚠️ Error searching page: {e}")
-        return False
+            return False
     
-    def search_all_iframes(self):
-        """Search through all iframes"""
+    def search_all_iframes_recursive(self):
+        """Search all iframes and their contents"""
         try:
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
             self.log(f"📊 Found {len(iframes)} iframe(s)")
             
             for i, iframe in enumerate(iframes):
-                if i in self.visited_iframes:
-                    continue
-                self.visited_iframes.add(i)
-                
                 try:
+                    # Get iframe info
                     iframe_id = iframe.get_attribute('id') or f"iframe-{i}"
                     iframe_src = iframe.get_attribute('src') or "unknown"
+                    iframe_title = iframe.get_attribute('title') or "N/A"
+                    iframe_class = iframe.get_attribute('class') or "N/A"
                     
-                    self.log(f"📄 Checking iframe {i+1}: id={iframe_id}")
+                    # Store info for later
+                    self.all_iframe_info.append({
+                        'index': i,
+                        'id': iframe_id,
+                        'src': iframe_src,
+                        'title': iframe_title,
+                        'class': iframe_class
+                    })
+                    
+                    self.log(f"\n📄 Checking iframe {i+1}:")
+                    self.log(f"   ID: {iframe_id}")
+                    self.log(f"   Title: {iframe_title}")
                     self.log(f"   SRC: {iframe_src[:100]}")
+                    
+                    # Skip if already visited
+                    if iframe_id in self.visited_frames:
+                        self.log(f"   ⏭️ Already visited, skipping")
+                        continue
+                    self.visited_frames.add(iframe_id)
                     
                     # Switch to iframe
                     self.driver.switch_to.frame(iframe)
+                    self.search_level += 1
                     
-                    # Search in iframe
+                    # Search inside iframe
+                    self.log(f"   🔍 Searching inside iframe...")
                     self.search_page_for_numbers()
                     
-                    # Try to find game elements inside iframe
+                    # If numbers found, we're done!
+                    if self.found_numbers:
+                        self.log(f"   ✅ Found numbers in iframe {i+1}!")
+                        self.driver.switch_to.default_content()
+                        return True
+                    
+                    # Look for game elements inside iframe
+                    self.log(f"   🔍 Looking for game elements inside iframe...")
                     self.search_game_elements_inside_iframe()
+                    
+                    # If numbers found after clicking, we're done!
+                    if self.found_numbers:
+                        self.log(f"   ✅ Found numbers after clicking inside iframe {i+1}!")
+                        self.driver.switch_to.default_content()
+                        return True
+                    
+                    # Check for nested iframes
+                    nested_iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+                    if nested_iframes:
+                        self.log(f"   📊 Found {len(nested_iframes)} nested iframe(s)")
+                        for nested in nested_iframes:
+                            try:
+                                nested_id = nested.get_attribute('id') or "unnamed"
+                                self.log(f"      🔍 Checking nested iframe: {nested_id}")
+                                self.driver.switch_to.frame(nested)
+                                self.search_page_for_numbers()
+                                if self.found_numbers:
+                                    self.log(f"      ✅ Found numbers in nested iframe!")
+                                    self.driver.switch_to.default_content()
+                                    return True
+                                self.driver.switch_to.parent_frame()
+                            except:
+                                self.driver.switch_to.default_content()
                     
                     # Go back to main content
                     self.driver.switch_to.default_content()
+                    self.search_level -= 1
                     
-                    if self.found_numbers:
-                        self.log(f"✅ Found numbers in iframe {i+1}!")
-                        return True
-                        
                 except Exception as e:
-                    self.log(f"⚠️ Could not process iframe {i+1}: {e}")
-                    self.driver.switch_to.default_content()
-                    
+                    self.log(f"   ⚠️ Error with iframe {i+1}: {e}")
+                    try:
+                        self.driver.switch_to.default_content()
+                    except:
+                        pass
+                    continue
+            
             return False
             
         except Exception as e:
@@ -158,36 +199,17 @@ class AISearchEngine:
             return False
     
     def search_game_elements_inside_iframe(self):
-        """Search for game elements inside current iframe"""
-        game_keywords = ['multiplier', 'odds', 'rate', 'value', 'number', 'digit', 'score', 'current', 'bet']
+        """Click on game elements inside the current iframe"""
+        game_keywords = ['AVIATOR', 'CRASH', 'SKYPILOT', 'BET', 'START', 'PLAY', 'LAUNCH', 'GAME']
         
         for keyword in game_keywords:
             try:
-                elements = self.driver.find_elements(By.XPATH, f"//*[contains(translate(@class, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{keyword}')]")
-                for element in elements[:10]:
-                    text = element.text.strip()
-                    if text and re.search(r'\d+\.\d+', text):
-                        self.found_numbers.append(text)
-                        self.log(f"✅ Found number in game element: '{text}'")
-            except:
-                pass
-    
-    def click_potential_game_elements(self):
-        """Click on elements that might lead to the game"""
-        # Try clicking on AVIATOR, CRASH, or other game names
-        game_names = ['AVIATOR', 'CRASH', 'SKYPILOT', 'SPORTS', 'CASINO', 'GAME', 'BET']
-        
-        for game_name in game_names:
-            try:
-                self.log(f"🔍 Trying to click: {game_name}")
-                
-                # Try multiple ways to find the element
+                # Try to find and click the element
                 selectors = [
-                    f"//*[contains(text(), '{game_name}')]",
-                    f"//*[contains(@class, '{game_name.lower()}')]",
-                    f"//*[contains(@id, '{game_name.lower()}')]",
-                    f"//button[contains(text(), '{game_name}')]",
-                    f"//div[contains(@class, 'game')]//*[contains(text(), '{game_name}')]",
+                    f"//*[contains(text(), '{keyword}')]",
+                    f"//*[contains(@class, '{keyword.lower()}')]",
+                    f"//button[contains(text(), '{keyword}')]",
+                    f"//div[contains(@role, 'button')]//*[contains(text(), '{keyword}')]",
                 ]
                 
                 for selector in selectors:
@@ -196,73 +218,53 @@ class AISearchEngine:
                         self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
                         time.sleep(0.5)
                         self.driver.execute_script("arguments[0].click();", element)
-                        self.log(f"✅ Clicked on: {game_name}")
+                        self.log(f"      ✅ Clicked on: {keyword}")
                         time.sleep(3)
                         
-                        # After clicking, search for numbers
+                        # Search for numbers after click
                         self.search_page_for_numbers()
-                        self.search_all_iframes()
-                        
                         if self.found_numbers:
                             return True
                     except:
                         continue
-                        
-            except Exception as e:
-                self.log(f"⚠️ Could not click {game_name}: {e}")
+            except:
+                pass
         
         return False
     
-    def deep_search(self):
-        """Deep search - follow links and buttons recursively"""
-        if self.search_depth > self.max_depth:
-            return
+    def click_inside_iframes(self):
+        """Click on elements inside iframes to reveal numbers"""
+        self.log("🔍 Attempting to click inside iframes...")
         
-        self.search_depth += 1
-        self.log(f"🔍 Deep search level {self.search_depth}...")
-        
-        # Click on any clickable elements that might contain numbers
-        clickable_selectors = [
-            "//button",
-            "//a",
-            "//div[@role='button']",
-            "//*[contains(@class, 'clickable')]",
-            "//*[contains(@class, 'btn')]",
-        ]
-        
-        for selector in clickable_selectors:
+        # Go through all iframes we found earlier
+        for iframe_info in self.all_iframe_info:
             try:
-                elements = self.driver.find_elements(By.XPATH, selector)
-                for element in elements[:5]:  # Limit to avoid too many clicks
-                    try:
-                        # Check if element has text that looks promising
-                        text = element.text.strip()
-                        if any(keyword in text.upper() for keyword in ['BET', 'START', 'PLAY', 'GAME', 'LAUNCH', 'AVIATOR', 'CRASH']):
-                            # Skip if already visited
-                            element_id = f"{element.tag_name}_{text}"
-                            if element_id in self.visited_elements:
-                                continue
-                            self.visited_elements.add(element_id)
-                            
-                            self.log(f"🔍 Clicking element: '{text[:30]}'")
-                            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-                            time.sleep(0.5)
-                            self.driver.execute_script("arguments[0].click();", element)
-                            time.sleep(3)
-                            
-                            # Search for numbers after click
-                            self.search_page_for_numbers()
-                            self.search_all_iframes()
-                            
-                            if self.found_numbers:
-                                return
-                    except:
-                        continue
+                # Find the iframe again
+                iframe = self.driver.find_element(By.ID, iframe_info['id'])
+                self.driver.switch_to.frame(iframe)
+                
+                self.log(f"🔍 Clicking inside iframe: {iframe_info['id']}")
+                
+                # Try to click on AVIATOR or game elements
+                self.search_game_elements_inside_iframe()
+                
+                if self.found_numbers:
+                    self.log(f"✅ Found numbers inside iframe!")
+                    self.driver.switch_to.default_content()
+                    return True
+                
+                self.driver.switch_to.default_content()
             except:
-                pass
+                try:
+                    self.driver.switch_to.default_content()
+                except:
+                    pass
+                continue
+        
+        return False
 
 # ============================================================
-# MAIN TEST EXECUTION - LOGIN → AVATAR → AI SEARCH
+# MAIN TEST EXECUTION
 # ============================================================
 
 try:
@@ -325,14 +327,14 @@ try:
         sys.exit(1)
 
     # =========================================================
-    # STEP 3: AI SEARCH FOR MULTIPLIERS
+    # STEP 3: DEEP IFRAME SEARCH
     # =========================================================
     print("\n" + "="*60)
-    print("🤖 STEP 3: AI SEARCH FOR MULTIPLIERS")
+    print("🤖 STEP 3: DEEP IFRAME SEARCH")
     print("="*60)
     
-    ai_engine = AISearchEngine(driver, wait)
-    numbers_found = ai_engine.search_for_multipliers()
+    search_engine = DeepIframeSearch(driver, wait)
+    numbers_found = search_engine.search_everywhere()
     
     # =========================================================
     # STEP 4: RESULTS
@@ -342,19 +344,36 @@ try:
     print("="*60)
     
     if numbers_found:
-        # Remove duplicates
+        # Remove duplicates and sort
         unique_numbers = list(set(numbers_found))
         print(f"✅ Found {len(unique_numbers)} number(s):")
         for i, num in enumerate(unique_numbers, 1):
             print(f"   {i}. {num}")
+        
+        # Try to extract the highest multiplier
+        highest = None
+        for num in unique_numbers:
+            try:
+                val = float(num.replace('x', ''))
+                if highest is None or val > highest:
+                    highest = val
+            except:
+                pass
+        
+        if highest:
+            print(f"   🏆 Highest multiplier: {highest}x")
+        
         driver.execute_script("sauce:job-result=passed")
         print("\n✅ Test PASSED! 🎉")
     else:
         print("❌ No multiplier numbers found")
-        print("\n💡 The game may need to be started first.")
-        print("   Look for a 'Bet' or 'Start' button in the Aviator game.")
-        driver.save_screenshot("no-numbers-ai-search.png")
-        print("📸 Screenshot saved: no-numbers-ai-search.png")
+        print("\n💡 Possible reasons:")
+        print("   - Game needs to be started (click 'Bet' or 'Start')")
+        print("   - Numbers appear after placing a bet")
+        print("   - The game is in a different iframe")
+        print("\n📸 Check the screenshot for debugging:")
+        driver.save_screenshot("no-numbers-deep-search.png")
+        print("   Screenshot saved: no-numbers-deep-search.png")
         driver.execute_script("sauce:job-result=passed")
 
 except Exception as e:
