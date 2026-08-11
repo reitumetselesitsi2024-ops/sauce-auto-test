@@ -348,12 +348,12 @@ try:
     
     email_field = wait.until(EC.presence_of_element_located((By.ID, "v-0-username")))
     email_field.clear()
-    email_field.send_keys("577772178")
+    email_field.send_keys("58532178")
     print("✅ Entered email/mobile number")
     
     password_field = driver.find_element(By.ID, "v-0-password")
     password_field.clear()
-    password_field.send_keys("vvbbbvbbsi")
+    password_field.send_keys("598976Lesitsi")
     print("✅ Entered password")
     
     login_button = wait.until(EC.element_to_be_clickable((By.ID, "v-0-submit-button")))
