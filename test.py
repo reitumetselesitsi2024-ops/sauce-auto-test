@@ -13,9 +13,8 @@ from pathlib import Path
 # ============================================================
 # CONFIGURATION
 # ============================================================
-PHONE_NUMBER = "58532178"
+PHONE_NUMBER = "62823939"
 PASSWORD = "598976Lesitsi"
-SCRAPE_INTERVAL = 2  # Minutes
 
 username = os.environ.get('SAUCE_USERNAME')
 access_key = os.environ.get('SAUCE_ACCESS_KEY')
@@ -39,12 +38,8 @@ def save_results():
         for mult in ALL_MULTIPLIERS:
             f.write(f"{mult}\n")
 
-# ============================================================
-# SCRAPER
-# ============================================================
-def scrape():
-    print(f"\n🔄 {datetime.now().strftime('%H:%M:%S')}")
-    
+def create_driver():
+    """Create a new Sauce Labs driver"""
     options = ChromeOptions()
     options.browser_version = 'latest'
     options.platform_name = 'Windows 11'
@@ -52,47 +47,52 @@ def scrape():
         'username': username,
         'accessKey': access_key,
         'build': 'Aviator-Scraper',
-        'name': 'Simple-Scraper'
+        'name': 'Forever-Scraper'
     })
     
     url = "https://ondemand.eu-central-1.saucelabs.com:443/wd/hub"
-    driver = None
+    return webdriver.Remote(command_executor=url, options=options)
+
+def login_and_go_to_aviator(driver):
+    """Login and navigate to Aviator"""
+    wait = WebDriverWait(driver, 20)
     
+    # Login
+    driver.get("https://thababet.co.ls/sign-in")
+    wait.until(EC.presence_of_element_located((By.CLASS_NAME, "login-page")))
+    
+    email_field = wait.until(EC.presence_of_element_located((By.ID, "v-0-username")))
+    email_field.clear()
+    email_field.send_keys(PHONE_NUMBER)
+    
+    password_field = driver.find_element(By.ID, "v-0-password")
+    password_field.clear()
+    password_field.send_keys(PASSWORD)
+    
+    login_button = wait.until(EC.element_to_be_clickable((By.ID, "v-0-submit-button")))
+    login_button.click()
+    time.sleep(5)
+    print("✅ Logged in")
+    
+    # Go to Aviator
+    driver.get("https://thababet.co.ls/spribe/8203")
+    time.sleep(8)
+    print("✅ Aviator loaded")
+    
+    # Find and switch to iframe
+    iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    for iframe in iframes:
+        src = iframe.get_attribute('src') or ""
+        if "aviator" in src.lower():
+            driver.switch_to.frame(iframe)
+            print("✅ In Aviator iframe")
+            return True
+    
+    return False
+
+def scrape_multipliers(driver):
+    """Extract multipliers from the current page"""
     try:
-        driver = webdriver.Remote(command_executor=url, options=options)
-        wait = WebDriverWait(driver, 20)
-        
-        # Login
-        driver.get("https://thababet.co.ls/sign-in")
-        wait.until(EC.presence_of_element_located((By.CLASS_NAME, "login-page")))
-        
-        email_field = wait.until(EC.presence_of_element_located((By.ID, "v-0-username")))
-        email_field.clear()
-        email_field.send_keys(PHONE_NUMBER)
-        
-        password_field = driver.find_element(By.ID, "v-0-password")
-        password_field.clear()
-        password_field.send_keys(PASSWORD)
-        
-        login_button = wait.until(EC.element_to_be_clickable((By.ID, "v-0-submit-button")))
-        login_button.click()
-        time.sleep(5)
-        
-        # Go to Aviator
-        driver.get("https://thababet.co.ls/spribe/8203")
-        time.sleep(8)
-        
-        # Find iframe
-        iframes = driver.find_elements(By.TAG_NAME, "iframe")
-        for iframe in iframes:
-            src = iframe.get_attribute('src') or ""
-            if "aviator" in src.lower():
-                driver.switch_to.frame(iframe)
-                break
-        
-        time.sleep(2)
-        
-        # Extract multipliers
         page_text = driver.find_element(By.TAG_NAME, "body").text
         pattern = r'\b\d+\.\d+x\b'
         matches = re.findall(pattern, page_text)
@@ -108,49 +108,61 @@ def scrape():
             
             if new_count > 0:
                 save_results()
-                print(f"✅ Saved {new_count} new")
-        
-        driver.quit()
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
-        return False
+                print(f"✅ Saved {new_count} new multiplier(s)")
+                print(f"📊 Total: {len(ALL_MULTIPLIERS)}")
+    except:
+        pass
 
 # ============================================================
-# MAIN LOOP
+# MAIN - BROWSER OPEN FOREVER
 # ============================================================
 def main():
     print("\n" + "="*50)
-    print("🚀 AVIATOR SCRAPER")
+    print("🚀 AVIATOR SCRAPER - BROWSER OPEN FOREVER")
     print("="*50)
-    print(f"⏰ Every {SCRAPE_INTERVAL} minutes")
+    print("📱 Phone: " + PHONE_NUMBER)
     print("="*50)
     
+    driver = None
     run_count = 0
     
     while True:
         try:
-            run_count += 1
-            print(f"\n📊 RUN #{run_count}")
-            scrape()
-            print(f"⏳ Waiting {SCRAPE_INTERVAL} min...")
-            time.sleep(SCRAPE_INTERVAL * 60)
+            # If no driver or driver is dead, create new one
+            if driver is None:
+                print("\n🔄 Creating new browser session...")
+                driver = create_driver()
+                print("✅ Browser opened")
+                
+                if not login_and_go_to_aviator(driver):
+                    print("❌ Failed to login. Restarting...")
+                    try:
+                        driver.quit()
+                    except:
+                        pass
+                    driver = None
+                    time.sleep(10)
+                    continue
+                
+                run_count = 0
             
-        except KeyboardInterrupt:
-            print("\n🛑 Stopped")
-            print(f"📊 Total: {len(ALL_MULTIPLIERS)} multipliers")
-            save_results()
-            print("✅ Saved to data/results.txt")
-            break
+            # Scrape
+            run_count += 1
+            print(f"\n📊 Scrape #{run_count} at {datetime.now().strftime('%H:%M:%S')}")
+            scrape_multipliers(driver)
+            
+            # Wait 2 seconds before next scrape (NO CLOSING)
+            time.sleep(2)
+            
         except Exception as e:
             print(f"❌ Error: {e}")
-            time.sleep(60)
+            print("🔄 Browser crashed. Restarting in 10 seconds...")
+            try:
+                driver.quit()
+            except:
+                pass
+            driver = None
+            time.sleep(10)
 
 if __name__ == "__main__":
     main()
